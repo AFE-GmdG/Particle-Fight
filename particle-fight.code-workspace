@@ -7,9 +7,11 @@
   "settings": {
     "files.exclude": {
       "*.code-workspace": true,
+      "**/*.tsbuildinfo": true,
       ".git": true,
       "**/node_modules": true,
       "**/dist": true,
+      "**/.dockerignore": true,
       "**/.gitignore": true,
       "**/.npmignore": true,
       "**/*lock.json": true,

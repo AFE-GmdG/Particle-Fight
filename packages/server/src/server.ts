@@ -8,7 +8,6 @@ import express from "express";
 
 import logging from "./config/logging";
 import { portalServer, onShutdown } from "./controllers/portalController";
-import routes from "./routes";
 
 const NAMESPACE = "Server";
 
@@ -40,7 +39,6 @@ router.use((req, res, next) => {
   next();
 });
 
-router.use("/api", routes);
 router.use("/", express.static(path.join(dirname, "client"), {
   dotfiles: "ignore",
   etag: true,

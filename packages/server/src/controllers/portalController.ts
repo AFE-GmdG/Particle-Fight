@@ -1,245 +1,188 @@
 import ws from "ws";
 
-type Client = {
-  valid: boolean;
-  name?: string;
-  uid?: number;
-  triedRandomUids?: Set<number>;
-};
+import { UnknownClient, KnownClient } from "../models/portalClient";
 
-type HelloModel = {
-  method: "hello";
-  id: number;
-};
+import { BroadcastModel } from "../models/portalBroadcast";
+import { RequestModel, isRequestModel, isHelloRequestModel, isHelloAgainRequestModel } from "../models/portalRequest";
+import { ResponseModel } from "../models/portalResponse";
 
-type GetRandomUidModel = {
-  method: "getRandomUid";
-  id: number;
-};
+const newClients = new Set<ws>();
+const unknownClients = new Map<ws, UnknownClient>();
+const knownClients = new Map<ws, KnownClient>();
+// const offlineClients = new Set<KnownClient>();
 
-type SetNameModel = {
-  method: "setName";
-  id: number;
-  name: string;
-  uid: number;
-};
+export const portalServer = new ws.Server({ noServer: true });
 
-type KnownModel =
-  HelloModel
-  | GetRandomUidModel
-  | SetNameModel;
+function sendResponse(self: ws, message: ResponseModel) {
+  self.send(JSON.stringify(message));
+}
 
-const isHelloModel = (knownModel: KnownModel): knownModel is HelloModel => knownModel.method === "hello";
-const isGetRandomUidModel = (knownModel: KnownModel): knownModel is GetRandomUidModel => knownModel.method === "getRandomUid";
-const isSetNameModel = (knownModel: KnownModel): knownModel is SetNameModel => knownModel.method === "setName";
-const isKnownModel = (obj: any): obj is KnownModel => (
-  "id" in obj
-  && typeof obj.id === "number"
-  && "method" in obj
-  && (
-    obj.method === "hello"
-    || obj.method === "getRandomUid"
-    || obj.method === "setName"
-  ));
-
-type OkResponseModel = {
-  method: "ok";
-  id: number;
-};
-
-type FailedResponseModel = {
-  method: "failed";
-  id: number;
-  reason: string;
-};
-
-type GetRandomUidResponseModel = {
-  method: "getRandomUid";
-  id: number;
-  uid: number;
-};
-
-type SetNameResponseModel = {
-  method: "setName";
-  name: string;
-  uid: number;
-};
-
-type LeaveResponseModel = {
-  method: "leave";
-  name: string;
-  uid: number;
-};
-
-type ServerShutdownResponseModel = {
-  method: "shutdown";
-};
-
-type ResponseModel =
-  OkResponseModel
-  | FailedResponseModel
-  | GetRandomUidResponseModel
-  | SetNameResponseModel
-  | LeaveResponseModel
-  | ServerShutdownResponseModel;
-
-const knownClients = new Map<ws, Client>();
-
-const sendAll = (self: ws | null, message: ResponseModel, filter: ((client: Client) => boolean) | undefined = undefined) => {
-  const myself = self && knownClients.get(self)!;
-  const from = myself && `${myself.name}#${myself.uid}`;
+function sendBroadcast(message: BroadcastModel): void;
+function sendBroadcast(message: BroadcastModel, filter: (client: UnknownClient | KnownClient) => boolean): void;
+function sendBroadcast(message: BroadcastModel, filter?: ((client: UnknownClient | KnownClient) => boolean)) {
+  const msg = JSON.stringify(message);
+  if (message.broadcast === "shutdown") {
+    knownClients.forEach((_client, socket) => { socket.close(0, msg); });
+    knownClients.clear();
+    unknownClients.forEach((_client, socket) => { socket.close(0, msg); });
+    unknownClients.clear();
+    newClients.forEach((socket) => { socket.close(0); });
+    newClients.clear();
+    return;
+  }
 
   knownClients.forEach((client, socket) => {
     if (filter && !filter(client)) {
       return;
     }
-    socket.send(JSON.stringify({
-      ...message,
-      from,
-    }));
+    socket.send(msg);
   });
-};
 
-const sendSelf = (self: ws, message: ResponseModel) => {
-  const myself = knownClients.get(self)!;
-  const from = myself.name && myself.uid && `${myself.name}#${myself.uid}`;
-
-  self.send(JSON.stringify({
-    ...message,
-    from,
-  }));
-};
-
-const sendOthers = (self: ws, message: ResponseModel) => {
-  const myself = knownClients.get(self)!;
-  if (!myself.name || !myself.uid) {
+  // Only allow "newClient", "online" and "offline" messages to unknownClients:
+  if (message.broadcast !== "newClient" && message.broadcast !== "online" && message.broadcast !== "offline") {
     return;
   }
-  const from = `${myself.name}#${myself.uid}`;
-
-  knownClients.forEach((_client, socket) => {
-    if (socket !== self) {
-      socket.send(JSON.stringify({
-        ...message,
-        from,
-      }));
+  unknownClients.forEach((client, socket) => {
+    if (filter && !filter(client)) {
+      return;
     }
+    socket.send(msg);
   });
-};
 
-const knownModelHandler = {
-  hello: (self: ws, helloModel: KnownModel) => {
-    if (!isHelloModel(helloModel)) return;
-    const myself = knownClients.get(self)!;
-    myself.valid = true;
-    sendSelf(self, {
-      method: "ok",
-      id: helloModel.id,
-    });
-  },
+  // No broadcast messages will be send to newClients
+}
 
-  getRandomUid: (self: ws, getRandomUidModel: KnownModel) => {
-    if (!isGetRandomUidModel(getRandomUidModel)) return;
-    const { id } = getRandomUidModel;
-    const myself = knownClients.get(self)!;
-    if (!myself.valid) {
-      sendSelf(self, {
-        method: "failed",
-        id,
-        reason: "Myself isn't valid.",
-      });
-      return;
-    }
-    if (myself.name || myself.uid) {
-      sendSelf(self, {
-        method: "failed",
-        id,
-        reason: "You already set your name.",
-      });
-      return;
-    }
-    const start = 1000; // 10;
-    const end = 10000; // 20;
-    const triedRandomUids = myself.triedRandomUids || new Set();
-    const otherClientUids = new Set(Array.from(knownClients, ([, client]) => client.uid));
-    knownClients.forEach((client) => client.uid && triedRandomUids.add(client.uid));
-
-    const freeKeys = Array
-      .from({ length: end - start }, (_, k) => k + start)
-      .filter((k) => !triedRandomUids.has(k) && !otherClientUids.has(k));
-
-    if (!freeKeys.length) {
-      sendSelf(self, {
-        method: "failed",
-        id,
-        reason: "No more free keys.",
-      });
-      return;
-    }
-
-    const uid = freeKeys[Math.floor(Math.random() * freeKeys.length)];
-    triedRandomUids.add(uid);
-    myself.triedRandomUids = triedRandomUids;
-    sendSelf(self, {
-      method: "getRandomUid",
+const requestHandler = {
+  hello(self: ws, helloRequestModel: RequestModel) {
+    const { id } = helloRequestModel;
+    // Check model type.
+    if (!isHelloRequestModel(helloRequestModel)) sendResponse(self, { method: "failed", id, reason: "Invalid request." });
+    // self must be in newClients.
+    if (!newClients.delete(self)) sendResponse(self, { method: "failed", id, reason: "You aren't a new client." });
+    // Generate key:
+    const key = Math.random().toString();
+    sendResponse(self, {
+      method: "okWithKey",
       id,
-      uid,
+      key,
     });
+    unknownClients.set(self, { key, triedRandomUids: new Set() });
   },
 
-  setName: (self: ws, setNameModel: KnownModel) => {
-    if (!isSetNameModel(setNameModel)) return;
-    const { id, name, uid } = setNameModel;
-    const myself = knownClients.get(self)!;
-    if (!myself.valid) {
-      sendSelf(self, {
-        method: "failed",
-        id,
-        reason: "Myself isn't valid.",
-      });
-      return;
-    }
-    if (myself.name || myself.uid) {
-      sendSelf(self, {
-        method: "failed",
-        id,
-        reason: "You already set your name.",
-      });
-      return;
-    }
-    myself.name = name;
-    myself.uid = uid;
-    sendSelf(self, {
-      method: "ok",
-      id,
-    });
-    sendOthers(self, {
-      method: "setName",
-      name,
-      uid,
-    });
-  },
-
-  leave: (self: ws) => {
-    const { valid, name, uid } = knownClients.get(self)!;
-    if (valid && name && uid) {
-      sendOthers(self, {
-        method: "leave",
-        name,
-        uid,
-      });
-    }
-  },
-
-  shutdown: () => {
-    sendAll(null, { method: "shutdown" }, (client) => client.valid);
+  helloAgain(self: ws, helloAgainRequestModel: RequestModel) {
+    const { id } = helloAgainRequestModel;
+    // Check model type.
+    if (!isHelloAgainRequestModel(helloAgainRequestModel)) sendResponse(self, { method: "failed", id, reason: "Invalid request." });
   },
 };
 
-export const portalServer = new ws.Server({ noServer: true });
+// const knownModelHandler = {
+//   hello: (self: ws, helloModel: KnownModel) => {
+//     if (!isHelloModel(helloModel)) return;
+//     const myself = knownClients.get(self)!;
+//     myself.valid = true;
+//     sendSelf(self, {
+//       method: "ok",
+//       id: helloModel.id,
+//     });
+//   },
+
+//   getRandomUid: (self: ws, getRandomUidModel: KnownModel) => {
+//     if (!isGetRandomUidModel(getRandomUidModel)) return;
+//     const { id } = getRandomUidModel;
+//     const myself = knownClients.get(self)!;
+//     if (!myself.valid) {
+//       sendSelf(self, {
+//         method: "failed",
+//         id,
+//         reason: "Myself isn't valid.",
+//       });
+//       return;
+//     }
+//     if (myself.name || myself.uid) {
+//       sendSelf(self, {
+//         method: "failed",
+//         id,
+//         reason: "You already set your name.",
+//       });
+//       return;
+//     }
+//     const start = 1000; // 10;
+//     const end = 10000; // 20;
+//     const triedRandomUids = myself.triedRandomUids || new Set();
+//     const otherClientUids = new Set(Array.from(knownClients, ([, client]) => client.uid));
+//     knownClients.forEach((client) => client.uid && triedRandomUids.add(client.uid));
+
+//     const freeKeys = Array
+//       .from({ length: end - start }, (_, k) => k + start)
+//       .filter((k) => !triedRandomUids.has(k) && !otherClientUids.has(k));
+
+//     if (!freeKeys.length) {
+//       sendSelf(self, {
+//         method: "failed",
+//         id,
+//         reason: "No more free keys.",
+//       });
+//       return;
+//     }
+
+//     const uid = freeKeys[Math.floor(Math.random() * freeKeys.length)];
+//     triedRandomUids.add(uid);
+//     myself.triedRandomUids = triedRandomUids;
+//     sendSelf(self, {
+//       method: "getRandomUid",
+//       id,
+//       uid,
+//     });
+//   },
+
+//   setName: (self: ws, setNameModel: KnownModel) => {
+//     if (!isSetNameModel(setNameModel)) return;
+//     const { id, name, uid } = setNameModel;
+//     const myself = knownClients.get(self)!;
+//     if (!myself.valid) {
+//       sendSelf(self, {
+//         method: "failed",
+//         id,
+//         reason: "Myself isn't valid.",
+//       });
+//       return;
+//     }
+//     if (myself.name || myself.uid) {
+//       sendSelf(self, {
+//         method: "failed",
+//         id,
+//         reason: "You already set your name.",
+//       });
+//       return;
+//     }
+//     myself.name = name;
+//     myself.uid = uid;
+//     sendSelf(self, {
+//       method: "ok",
+//       id,
+//     });
+//     sendOthers(self, {
+//       method: "setName",
+//       name,
+//       uid,
+//     });
+//   },
+
+//   leave: (self: ws) => {
+//     const { valid, name, uid } = knownClients.get(self)!;
+//     if (valid && name && uid) {
+//       sendOthers(self, {
+//         method: "leave",
+//         name,
+//         uid,
+//       });
+//     }
+//   },
+// };
 
 portalServer.on("connection", (socket) => {
-  knownClients.set(socket, { valid: false });
+  newClients.add(socket);
 
   socket.on("message", (message) => {
     try {
@@ -247,10 +190,11 @@ portalServer.on("connection", (socket) => {
         return;
       }
       const json = JSON.parse(message);
-      if (!isKnownModel(json)) {
-        return;
+      if (isRequestModel(json)) {
+        requestHandler[json.method](socket, json);
+        // return;
       }
-      knownModelHandler[json.method](socket, json);
+      // knownModelHandler[json.method](socket, json);
     } catch {
       // Ignore any invalid data
     }
@@ -258,11 +202,11 @@ portalServer.on("connection", (socket) => {
 
   socket.on("close", (code, reason) => {
     console.log(`Closing Socket... Code: ${code}, Reason: ${reason}`);
-    knownModelHandler.leave(socket);
-    knownClients.delete(socket);
+    // knownModelHandler.leave(socket);
+    // knownClients.delete(socket);
   });
 });
 
 export const onShutdown = () => {
-  knownModelHandler.shutdown();
+  sendBroadcast({ broadcast: "shutdown" });
 };
