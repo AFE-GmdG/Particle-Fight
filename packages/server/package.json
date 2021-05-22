@@ -1,0 +1,23 @@
+{
+  "name": "@afegmdg/pf-server",
+  "version": "0.1.0",
+  "description": "Particle Fight Server",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "prestart": "tsc",
+    "start": "node --experimental-specifier-resolution=node ."
+  },
+  "type": "module",
+  "main": "./dist/server.js",
+  "devDependencies": {
+    "@types/express": "4.17.11",
+    "@types/node": "14.17.0",
+    "@types/ws": "7.4.4",
+    "typescript": "4.2.4"
+  },
+  "dependencies": {
+    "express": "4.17.1",
+    "ws": "7.4.5"
+  }
+}

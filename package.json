@@ -1,0 +1,21 @@
+{
+  "name": "@afegmdg/pf",
+  "version": "0.1.0",
+  "description": "Particle Fight",
+  "author": "AFE-GmdG <afe-gmdg@gmx.de>",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">= 14.16.1"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "clean": "node ./scripts/clean.js",
+    "prebuild": "rimraf packages/server/dist packages/server/tsconfig.tsbuildinfo",
+    "build": "tsc --build packages/server/tsconfig.production.json && webpack --config=packages/client/webpack.config.js --mode=production",
+    "prestart": "rimraf packages/server/dist packages/server/tsconfig.tsbuildinfo",
+    "start": "tsc --build packages/server/tsconfig.production.json && webpack --config=packages/client/webpack.config.js --mode=production && node --experimental-specifier-resolution=node ./packages/server"
+  }
+}

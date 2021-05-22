@@ -1,0 +1,20 @@
+# Workspace specific files
+**/node_modules/
+packages/server/tsconfig.tsbuildinfo
+packages/server/dist/
+
+# Log files
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# The solution is set up via workspace, I don't want to use the .vscode folder
+.vscode/
+
+# Additional files and folders
+.npm
+.yarn-integrity
+.eslintcache
+*.tgz

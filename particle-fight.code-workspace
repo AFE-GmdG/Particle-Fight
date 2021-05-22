@@ -1,0 +1,171 @@
+{
+  "folders": [{
+    "name": "Particle Fight",
+    "path": ".",
+  }],
+
+  "settings": {
+    "files.exclude": {
+      "*.code-workspace": true,
+      ".git": true,
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/.gitignore": true,
+      "**/.npmignore": true,
+      "**/*lock.json": true,
+      "**/*.lock": true,
+      "**/*.log": true,
+    },
+
+    "editor.scrollBeyondLastLine": true,
+    "editor.minimap.enabled": false,
+    "editor.wordWrap": "off",
+    "editor.tabCompletion": "on",
+    "editor.cursorBlinking": "smooth",
+    "editor.mouseWheelZoom": true,
+    "editor.renderWhitespace": "none",
+    "editor.renderIndentGuides": true,
+    "editor.detectIndentation": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2,
+
+    "explorer.compactFolders": false,
+    "explorer.openEditors.visible": 0,
+
+    "files.autoSave": "off",
+    "files.eol": "\n",
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+
+    "typescript.suggest.autoImports": false,
+    "typescript.suggest.paths": true,
+    "typescript.updateImportsOnFileMove.enabled": "never",
+    "typescript.format.insertSpaceAfterCommaDelimiter": true,
+    "typescript.format.insertSpaceAfterSemicolonInForStatements": true,
+    "typescript.format.insertSpaceBeforeAndAfterBinaryOperators": true,
+    "typescript.format.insertSpaceAfterKeywordsInControlFlowStatements": true,
+    "typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+    "typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
+    "typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+    "typescript.format.insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": false,
+    "typescript.format.insertSpaceAfterOpeningAndBeforeClosingJsxExpressionBraces": false,
+    "typescript.format.placeOpenBraceOnNewLineForFunctions": false,
+    "typescript.format.placeOpenBraceOnNewLineForControlBlocks": false,
+
+    "javascript.format.insertSpaceAfterCommaDelimiter": true,
+    "javascript.format.insertSpaceAfterSemicolonInForStatements": true,
+    "javascript.format.insertSpaceBeforeAndAfterBinaryOperators": true,
+    "javascript.format.insertSpaceAfterKeywordsInControlFlowStatements": true,
+    "javascript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+    "javascript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
+    "javascript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+    "javascript.format.insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": false,
+    "javascript.format.insertSpaceAfterOpeningAndBeforeClosingJsxExpressionBraces": false,
+    "javascript.format.placeOpenBraceOnNewLineForFunctions": false,
+    "javascript.format.placeOpenBraceOnNewLineForControlBlocks": false,
+  },
+
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Launch Server",
+        "type": "node",
+        "request": "launch",
+        "skipFiles": [
+          "<node_internals>/**",
+        ],
+        "program": "${workspaceFolder}/packages/server",
+        "runtimeArgs": [
+          "--experimental-specifier-resolution=node",
+        ],
+        "preLaunchTask": "build-server",
+      }, {
+        "name": "Launch Client",
+        "type": "chrome",
+        "request": "launch",
+        "url": "http://localhost:3001",
+        "webRoot": "${workspaceFolder}/packages/client/dist",
+        "preLaunchTask": "build-client",
+        "breakOnLoad": false,
+        "sourceMaps": true,
+        "sourceMapPathOverrides": {
+          "webpack:///./*": "${workspaceFolder}/packages/client/src/*",
+          "webpack:///*": "*",
+        },
+      },
+    ],
+    "compounds": [
+      {
+        "name": "Debug Particle Fight",
+        "configurations": ["Launch Server", "Launch Client"],
+      },
+    ],
+  },
+
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "build-server",
+        "type": "process",
+        "command": "yarn",
+        "windows": {
+          "command": "yarn.cmd",
+        },
+        "args": [
+          "--cwd",
+          "${workspaceFolder}/packages/server",
+          "build",
+        ],
+        "problemMatcher": "$tsc",
+      }, {
+        "label": "build-client",
+        "type": "process",
+        "command": "yarn",
+        "windows": {
+          "command": "yarn.cmd",
+        },
+        "args": [
+          "--cwd",
+          "${workspaceFolder}/packages/client",
+          "start",
+        ],
+        "problemMatcher": {
+          "owner": "webpack",
+          "severity": "error",
+          "fileLocation": "absolute",
+          "pattern": [
+            {
+              "regexp": "ERROR in [^ ]* (.*):(.*):(.*)",
+              "file": 1,
+              "line": 2,
+              "column": 3,
+            },
+            {
+              "regexp": ".*",
+              "message": 0
+            },
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^.*: Compiling\\.\\.\\.$",
+            "endsPattern": "^.*: (?:Compiled successfully|Compiled with warnings|Failed to compile)\\.$",
+          },
+        },
+        "group": "none",
+        "presentation": {
+          "echo": true,
+          "reveal": "silent",
+          "focus": false,
+          "panel": "shared",
+          "showReuseMessage": false,
+          "clear": true
+        },
+        "isBackground": true,
+        "promptOnClose": false,
+      },
+    ],
+  },
+
+}
