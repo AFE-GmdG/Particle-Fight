@@ -10,6 +10,7 @@ import CardContent from "@material-ui/core/CardContent";
 import CardHeader from "@material-ui/core/CardHeader";
 import IconButton from "@material-ui/core/IconButton";
 import InputAdornment from "@material-ui/core/InputAdornment";
+import LinearProgress from "@material-ui/core/LinearProgress";
 import TextField from "@material-ui/core/TextField";
 import Typography from "@material-ui/core/Typography";
 
@@ -17,7 +18,7 @@ import AutorenewTwoTone from "@material-ui/icons/AutorenewTwoTone";
 import SignalCellular4BarTwoTone from "@material-ui/icons/SignalCellular4BarTwoTone";
 import SignalCellularOffTwoTone from "@material-ui/icons/SignalCellularOffTwoTone";
 
-import { usePortalService } from "../services/portalService";
+import PortalContext from "../services/portalService";
 
 const useStyles = makeStyles((theme: Theme) => createStyles({
   root: {
@@ -52,13 +53,15 @@ const Login: React.FC = () => {
   const mounted = React.useRef(false);
   const history = useHistory();
   const classes = useStyles();
-  const { loading, error, connected, initialized, myself, knownClients, getRandomUid, setName } = usePortalService();
+
+  const { loading, error, connected, myself, knownClients, getRandomUid, setName } = React.useContext(PortalContext);
+
   const [userName, setUserName] = React.useState("");
   const [uid, setUid] = React.useState(0);
   const avatarLetter = React.useMemo(() => (userName && userName[0].toUpperCase()) || "#", [userName]);
 
   React.useLayoutEffect(() => {
-    if (myself !== null) {
+    if (myself !== null && "name" in myself) {
       history.push("/");
     }
   }, [myself]);
@@ -72,9 +75,6 @@ const Login: React.FC = () => {
 
   const onSetNameClick = React.useCallback(async () => {
     await setName(userName, uid);
-    if (mounted.current) {
-      // Route
-    }
   }, [userName, uid, setName]);
 
   const onUserNameKeyPress = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -107,10 +107,10 @@ const Login: React.FC = () => {
       }
     };
 
-    if (!loading && initialized && (uid === 0 || knownClients.find((client) => client.uid === uid))) {
+    if (!loading && (uid === 0 || knownClients.find((client) => client.uid === uid))) {
       getNextRandomUid();
     }
-  }, [loading, initialized, uid, knownClients, getRandomUid]);
+  }, [loading, uid, knownClients, getRandomUid]);
 
   return (
     <div className={classes.root}>
@@ -134,7 +134,7 @@ const Login: React.FC = () => {
             onChange={(e) => setUserName(e.currentTarget.value)}
             onKeyPress={onUserNameKeyPress}
             fullWidth
-            disabled={loading || error !== null || !uid || !initialized}
+            disabled={loading || error !== null || !uid}
             InputProps={{
               autoFocus: true,
             }}
@@ -154,7 +154,7 @@ const Login: React.FC = () => {
               ),
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton edge="end" onClick={onGetNextRandomUidClick} disabled={loading || error !== null || !initialized}>
+                  <IconButton edge="end" onClick={onGetNextRandomUidClick} disabled={loading || error !== null}>
                     <AutorenewTwoTone />
                   </IconButton>
                 </InputAdornment>
@@ -162,6 +162,13 @@ const Login: React.FC = () => {
             }}
           />
         </CardContent>
+        {
+          (!error && loading && (
+            <CardContent>
+              <LinearProgress />
+            </CardContent>
+          )) || null
+        }
         {
           error && (
             <CardContent className={classes.cardContent}>
@@ -176,7 +183,7 @@ const Login: React.FC = () => {
             size="small"
             color="primary"
             onClick={onSetNameClick}
-            disabled={loading || error !== null || !userName || !uid || !initialized}
+            disabled={loading || error !== null || !userName || !uid}
           >
             Set Name
           </Button>

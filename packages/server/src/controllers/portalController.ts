@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import ws from "ws";
 
 import { UnknownClient, KnownClient } from "../models/portalClient";
@@ -9,9 +11,13 @@ import { ResponseModel } from "../models/portalResponse";
 const newClients = new Set<ws>();
 const unknownClients = new Map<ws, UnknownClient>();
 const knownClients = new Map<ws, KnownClient>();
-// const offlineClients = new Set<KnownClient>();
+const offlineClients = new Set<KnownClient>();
 
 export const portalServer = new ws.Server({ noServer: true });
+
+function generateKey() {
+  return crypto.randomBytes(32).toString("hex");
+}
 
 function sendResponse(self: ws, message: ResponseModel) {
   self.send(JSON.stringify(message));
@@ -55,24 +61,54 @@ function sendBroadcast(message: BroadcastModel, filter?: ((client: UnknownClient
 const requestHandler = {
   hello(self: ws, helloRequestModel: RequestModel) {
     const { id } = helloRequestModel;
-    // Check model type.
-    if (!isHelloRequestModel(helloRequestModel)) sendResponse(self, { method: "failed", id, reason: "Invalid request." });
-    // self must be in newClients.
-    if (!newClients.delete(self)) sendResponse(self, { method: "failed", id, reason: "You aren't a new client." });
+    // Check model type:
+    if (!isHelloRequestModel(helloRequestModel)) {
+      sendResponse(self, { method: "failed", id, reason: "Invalid request." });
+      return;
+    }
+    // self must be in newClients:
+    if (!newClients.delete(self)) {
+      sendResponse(self, { method: "failed", id, reason: "You aren't a new client." });
+      return;
+    }
     // Generate key:
-    const key = Math.random().toString();
+    const key = generateKey();
+    unknownClients.set(self, { key, triedRandomUids: new Set() });
     sendResponse(self, {
-      method: "okWithKey",
+      method: "hello",
       id,
       key,
     });
-    unknownClients.set(self, { key, triedRandomUids: new Set() });
   },
 
   helloAgain(self: ws, helloAgainRequestModel: RequestModel) {
     const { id } = helloAgainRequestModel;
-    // Check model type.
-    if (!isHelloAgainRequestModel(helloAgainRequestModel)) sendResponse(self, { method: "failed", id, reason: "Invalid request." });
+    // Check model type:
+    if (!isHelloAgainRequestModel(helloAgainRequestModel)) {
+      sendResponse(self, { method: "failed", id, reason: "Invalid request." });
+      return;
+    }
+    // self could be in offlineClients. If so - reenable:
+    const offlineClient = Array.from(offlineClients).find((client) => client.key === helloAgainRequestModel.key);
+    if (offlineClient) {
+      offlineClients.delete(offlineClient);
+      knownClients.set(self, offlineClient);
+      sendResponse(self, { method: "helloAgain", id, name: offlineClient.name, uid: offlineClient.uid });
+      return;
+    }
+    // self wasn't in offlineClients - so it must be in newClients:
+    if (!newClients.delete(self)) {
+      sendResponse(self, { method: "failed", id, reason: "You aren't a new client." });
+      return;
+    }
+    // Answer with a standard hello:
+    const key = generateKey();
+    unknownClients.set(self, { key, triedRandomUids: new Set() });
+    sendResponse(self, {
+      method: "hello",
+      id,
+      key,
+    });
   },
 };
 
@@ -202,8 +238,14 @@ portalServer.on("connection", (socket) => {
 
   socket.on("close", (code, reason) => {
     console.log(`Closing Socket... Code: ${code}, Reason: ${reason}`);
-    // knownModelHandler.leave(socket);
-    // knownClients.delete(socket);
+    const knownClient = knownClients.get(socket);
+    unknownClients.delete(socket);
+    newClients.delete(socket);
+    if (knownClient) {
+      // knownModelHandler.leave(socket);
+      knownClients.delete(socket);
+      offlineClients.add(knownClient);
+    }
   });
 });
 

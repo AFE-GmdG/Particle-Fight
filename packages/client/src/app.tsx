@@ -9,6 +9,8 @@ import PrivateRoute from "./components/privateRoute";
 import Slash from "./views/slash";
 import Login from "./views/login";
 
+import { PortalServiceProvider } from "./services/portalService";
+
 import muiTheme from "./theme";
 
 const useStyles = makeStyles((theme: Theme) => createStyles({
@@ -48,12 +50,14 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={muiTheme}>
       <BrowserRouter>
-        <Box className={classes.content}>
-          <Switch>
-            <Route path="/login" component={Login} />
-            <PrivateRoute path="/" exact component={Slash} />
-          </Switch>
-        </Box>
+        <PortalServiceProvider>
+          <Box className={classes.content}>
+            <Switch>
+              <Route path="/login" component={Login} />
+              <PrivateRoute path="/" exact component={Slash} />
+            </Switch>
+          </Box>
+        </PortalServiceProvider>
       </BrowserRouter>
     </ThemeProvider>
   );

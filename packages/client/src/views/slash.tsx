@@ -5,7 +5,7 @@ import { createStyles, makeStyles, Theme } from "@material-ui/core/styles";
 import Grid from "@material-ui/core/Grid";
 import Typography from "@material-ui/core/Typography";
 
-import { PlayerList } from "../components/portal/playerList";
+import PlayerList from "../components/portal/playerList";
 
 const useStyles = makeStyles((theme: Theme) => createStyles({
   slash: {

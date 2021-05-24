@@ -4,7 +4,7 @@ import { createStyles, makeStyles, Theme } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import Typography from "@material-ui/core/Typography";
 
-import { usePortalService } from "../../services/portalService";
+import PortalContext from "../../services/portalService";
 
 const useStyles = makeStyles((_theme: Theme) => createStyles({
   root: {
@@ -12,10 +12,10 @@ const useStyles = makeStyles((_theme: Theme) => createStyles({
   },
 }));
 
-export const PlayerList: React.FC = () => {
+const PlayerList: React.FC = () => {
   const mounted = React.useRef(false);
   const classes = useStyles();
-  const { myself, knownClients } = usePortalService();
+  const { myself, knownClients } = React.useContext(PortalContext);
 
   // Handle mounted reference
   React.useEffect(() => {
@@ -28,7 +28,7 @@ export const PlayerList: React.FC = () => {
   return (
     <Paper className={classes.root} elevation={3}>
       {
-        myself && (
+        myself && "name" in myself && (
           <Typography variant="h6">{`${myself.name}#${myself.uid}`}</Typography>
         )
       }
@@ -44,3 +44,5 @@ export const PlayerList: React.FC = () => {
     </Paper>
   );
 };
+
+export default PlayerList;

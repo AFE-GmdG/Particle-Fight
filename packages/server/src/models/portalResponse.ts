@@ -9,13 +9,21 @@ export type FailedResponseModel = {
   reason: string;
 };
 
-export type OkWithKeyResponseModel = {
+export type HelloResponseModel = {
   id: number;
-  method: "okWithKey";
+  method: "hello";
   key: string;
+};
+
+export type HelloAgainResponseModel = {
+  id: number;
+  method: "helloAgain";
+  name: string;
+  uid: number;
 };
 
 export type ResponseModel =
   OkResponseModel
   | FailedResponseModel
-  | OkWithKeyResponseModel;
+  | HelloResponseModel
+  | HelloAgainResponseModel;
