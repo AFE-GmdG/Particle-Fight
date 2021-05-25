@@ -14,16 +14,16 @@ const useStyles = makeStyles((_theme: Theme) => createStyles({
 
 const PlayerList: React.FC = () => {
   const mounted = React.useRef(false);
-  const classes = useStyles();
-  const { myself, knownClients } = React.useContext(PortalContext);
-
   // Handle mounted reference
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
   }, []);
+
+  const classes = useStyles();
+  const { myself, knownClients } = React.useContext(PortalContext);
 
   return (
     <Paper className={classes.root} elevation={3}>

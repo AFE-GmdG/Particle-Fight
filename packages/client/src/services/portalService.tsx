@@ -71,6 +71,14 @@ const PortalContext = React.createContext(portalContextData);
 
 export const PortalServiceProvider: React.FC = ({ children }) => {
   const mounted = React.useRef(false);
+  // Handle mounted reference
+  React.useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const history = useHistory();
 
   const [, setLoading] = React.useState(false);
@@ -325,14 +333,6 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
       // ignore
     }
   }, [requests, lastMessage]);
-
-  // Handle mounted reference
-  React.useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
 
   return (
     <PortalContext.Provider value={portalService}>

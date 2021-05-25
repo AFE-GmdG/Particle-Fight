@@ -51,6 +51,14 @@ const useStyles = makeStyles((theme: Theme) => createStyles({
 
 const Login: React.FC = () => {
   const mounted = React.useRef(false);
+  // Handle mounted reference
+  React.useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const history = useHistory();
   const classes = useStyles();
 
@@ -90,14 +98,6 @@ const Login: React.FC = () => {
     event.preventDefault();
     onSetNameClick();
   }, [userName]);
-
-  // Handle mounted reference
-  React.useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
 
   return (
     <div className={classes.root}>
