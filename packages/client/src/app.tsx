@@ -8,6 +8,7 @@ import Box from "@material-ui/core/Box";
 import PrivateRoute from "./components/privateRoute";
 import Slash from "./views/slash";
 import Login from "./views/login";
+import NoServer from "./views/noServer";
 
 import { PortalServiceProvider } from "./services/portalService";
 
@@ -54,6 +55,7 @@ const App: React.FC = () => {
           <Box className={classes.content}>
             <Switch>
               <Route path="/login" component={Login} />
+              <Route path="/no-server" component={NoServer} />
               <PrivateRoute path="/" exact component={Slash} />
             </Switch>
           </Box>

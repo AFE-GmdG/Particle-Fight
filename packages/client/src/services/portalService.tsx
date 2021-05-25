@@ -1,4 +1,5 @@
 import React from "react";
+import { useHistory } from "react-router-dom";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
 import { KnownClient, Myself, MyselfBeforeLogin } from "../models/portalClient";
@@ -18,6 +19,11 @@ import {
   isHelloResponseModel,
   isHelloAgainResponseModel,
 } from "../models/portalResponse";
+import {
+  BroadcastModel,
+  isBroadcastModel,
+  isShutdownBroadcastModel,
+} from "../models/portalBroadcast";
 
 type ResolveHandler = (value?: void | any | PromiseLike<void> | PromiseLike<any>) => void;
 type RejectHandler = (reason?: any) => void;
@@ -65,6 +71,7 @@ const PortalContext = React.createContext(portalContextData);
 
 export const PortalServiceProvider: React.FC = ({ children }) => {
   const mounted = React.useRef(false);
+  const history = useHistory();
 
   const [, setLoading] = React.useState(false);
   const [error, setError] = React.useState<Error | null>(null);
@@ -85,8 +92,19 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     reconnectInterval: 1000,
     reconnectAttempts: 10,
     shouldReconnect: ((event) => {
-      console.warn(event.type);
-      return true;
+      const { type, reason } = event;
+      try {
+        const message = JSON.parse(reason);
+        if (isBroadcastModel(message) && isShutdownBroadcastModel(message)) {
+          history.push("/no-server");
+          return false;
+        }
+        console.warn(`ShouldReconnect: ${type} - [${reason}]`);
+        return true;
+      } catch {
+        console.warn(`ShouldReconnect (Error): ${type} - [${reason}]`);
+        return false;
+      }
     }),
   });
 
@@ -198,8 +216,8 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
       resolve({ key: response.key, uid: response.uid });
     },
 
-    setName(request: RequestModel, response: ResponseModel, resolve: ResolveHandler, reject: RejectHandler, key?: string) {
-      if (!isSetNameRequestModel(request) || !key) {
+    setName(request: RequestModel, response: ResponseModel, resolve: ResolveHandler, reject: RejectHandler) {
+      if (!isSetNameRequestModel(request) || !myself || !myself.key) {
         reject(new Error("Invalid Request"));
         return;
       }
@@ -208,9 +226,30 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         reject(new Error("Invalid Response"));
         return;
       }
-      resolve({ name: request.name, uid: request.uid, key });
+      resolve({ name: request.name, uid: request.uid, key: myself.key });
     },
-  }), []);
+  }), [myself]);
+
+  const broadcastHandler = React.useMemo(() => ({
+    shutdown() {
+      history.push("/no-server");
+    },
+
+    newClient(_message: BroadcastModel) {
+    },
+
+    offline(_message: BroadcastModel) {
+    },
+
+    online(_message: BroadcastModel) {
+    },
+
+    logout(_message: BroadcastModel) {
+    },
+
+    chat(_message: BroadcastModel) {
+    },
+  }), [myself]);
 
   // calculate the current portalService state
   const portalService = React.useMemo(() => {
@@ -277,7 +316,10 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         const { id } = response;
         const [request, resolve, reject] = requests.get(id) || [null, null, null];
         if (!request || !resolve || !reject) return;
-        responseHandler[request.method](request, response, resolve, reject, myself?.key);
+        responseHandler[request.method](request, response, resolve, reject);
+      } else if (isBroadcastModel(response)) {
+        // Broadcast handling
+        broadcastHandler[response.broadcast](response);
       }
     } catch {
       // ignore
