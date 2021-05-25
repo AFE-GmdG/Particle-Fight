@@ -15,7 +15,8 @@
     "clean": "node ./scripts/clean.js",
     "prebuild": "rimraf packages/server/dist packages/server/tsconfig.tsbuildinfo",
     "build": "tsc --build packages/server/tsconfig.production.json && webpack --config=packages/client/webpack.config.js --mode=production",
-    "build:docker": "docker build -t afegmdg/particle-fight:0.1.0 .",
+    "docker:build": "docker build -t afegmdg/particle-fight:0.1.0 .",
+    "docker:run": "docker run -p 8080:3000 -t -i -d afegmdg/particle-fight:0.1.0",
     "prestart": "rimraf packages/server/dist packages/server/tsconfig.tsbuildinfo",
     "start": "tsc --build packages/server/tsconfig.production.json && webpack --config=packages/client/webpack.config.js --mode=production && node --experimental-specifier-resolution=node ./packages/server"
   }

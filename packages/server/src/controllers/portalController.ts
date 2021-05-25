@@ -28,11 +28,12 @@ function sendBroadcast(message: BroadcastModel, filter: (client: UnknownClient |
 function sendBroadcast(message: BroadcastModel, filter?: ((client: UnknownClient | KnownClient) => boolean)) {
   const msg = JSON.stringify(message);
   if (message.broadcast === "shutdown") {
-    knownClients.forEach((_client, socket) => { socket.close(0, msg); });
+    // Valid closing status codes: https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent#status_codes
+    knownClients.forEach((_client, socket) => { socket.close(1000, msg); });
     knownClients.clear();
-    unknownClients.forEach((_client, socket) => { socket.close(0, msg); });
+    unknownClients.forEach((_client, socket) => { socket.close(1000, msg); });
     unknownClients.clear();
-    newClients.forEach((socket) => { socket.close(0); });
+    newClients.forEach((socket) => { socket.close(1000); });
     newClients.clear();
     return;
   }
