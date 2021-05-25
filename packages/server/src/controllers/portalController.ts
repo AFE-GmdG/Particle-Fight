@@ -2,21 +2,43 @@ import crypto from "crypto";
 
 import ws from "ws";
 
-import { UnknownClient, KnownClient } from "../models/portalClient";
+import logging from "../config/logging";
 
+import { UnknownClient, KnownClient, OfflineClient } from "../models/portalClient";
 import { BroadcastModel } from "../models/portalBroadcast";
-import { RequestModel, isRequestModel, isHelloRequestModel, isHelloAgainRequestModel } from "../models/portalRequest";
+import { RequestModel, isRequestModel, isHelloRequestModel, isHelloAgainRequestModel, isSetNameRequestModel } from "../models/portalRequest";
 import { ResponseModel } from "../models/portalResponse";
 
+const NAMESPACE = "PortalController";
 const newClients = new Set<ws>();
 const unknownClients = new Map<ws, UnknownClient>();
 const knownClients = new Map<ws, KnownClient>();
-const offlineClients = new Set<KnownClient>();
+const offlineClients = new Set<OfflineClient>();
 
 export const portalServer = new ws.Server({ noServer: true });
 
 function generateKey() {
   return crypto.randomBytes(32).toString("hex");
+}
+
+function generateRandomUid(self: ws) {
+  const unknownClient = unknownClients.get(self);
+  if (!unknownClient) throw new Error("GenerateRandomUid: No unknown client.");
+
+  const start = 1000; // 10;
+  const end = 10000; // 20;
+  const { triedRandomUids } = unknownClient;
+  const otherClientUids = new Set([
+    ...Array.from(knownClients, ([, client]) => client.uid),
+    ...Array.from(offlineClients, (client) => client.uid),
+  ]);
+  const freeKeys = Array
+    .from({ length: end - start }, (_, k) => k + start)
+    .filter((k) => !triedRandomUids.has(k) && !otherClientUids.has(k));
+  if (!freeKeys.length) throw new Error("No more free keys.");
+  const uid = freeKeys[Math.floor(Math.random() * freeKeys.length)];
+  triedRandomUids.add(uid);
+  return uid;
 }
 
 function sendResponse(self: ws, message: ResponseModel) {
@@ -59,11 +81,18 @@ function sendBroadcast(message: BroadcastModel, filter?: ((client: UnknownClient
   // No broadcast messages will be send to newClients
 }
 
+function offlineClientTimeoutHandler(key: string) {
+  const offlineClient = Array.from(offlineClients).find((client) => client.key === key);
+  if (!offlineClient) return;
+  offlineClients.delete(offlineClient);
+  sendBroadcast({ broadcast: "logout", sender: { name: offlineClient.name, uid: offlineClient.uid } });
+}
+
 const requestHandler = {
-  hello(self: ws, helloRequestModel: RequestModel) {
-    const { id } = helloRequestModel;
+  hello(self: ws, request: RequestModel) {
+    const { id } = request;
     // Check model type:
-    if (!isHelloRequestModel(helloRequestModel)) {
+    if (!isHelloRequestModel(request)) {
       sendResponse(self, { method: "failed", id, reason: "Invalid request." });
       return;
     }
@@ -75,26 +104,37 @@ const requestHandler = {
     // Generate key:
     const key = generateKey();
     unknownClients.set(self, { key, triedRandomUids: new Set() });
-    sendResponse(self, {
-      method: "hello",
-      id,
-      key,
-    });
+    try {
+      const uid = generateRandomUid(self);
+      sendResponse(self, {
+        method: "hello",
+        id,
+        key,
+        uid,
+      });
+    } catch (ex) {
+      if (ex instanceof Error) {
+        sendResponse(self, { method: "failed", id, reason: ex.message });
+      }
+    }
   },
 
-  helloAgain(self: ws, helloAgainRequestModel: RequestModel) {
-    const { id } = helloAgainRequestModel;
+  helloAgain(self: ws, request: RequestModel) {
+    const { id } = request;
     // Check model type:
-    if (!isHelloAgainRequestModel(helloAgainRequestModel)) {
+    if (!isHelloAgainRequestModel(request)) {
       sendResponse(self, { method: "failed", id, reason: "Invalid request." });
       return;
     }
     // self could be in offlineClients. If so - reenable:
-    const offlineClient = Array.from(offlineClients).find((client) => client.key === helloAgainRequestModel.key);
+    const offlineClient = Array.from(offlineClients).find((client) => client.key === request.key);
     if (offlineClient) {
       offlineClients.delete(offlineClient);
-      knownClients.set(self, offlineClient);
-      sendResponse(self, { method: "helloAgain", id, name: offlineClient.name, uid: offlineClient.uid });
+      const { timeoutHandle, ...knownClient } = offlineClient;
+      clearTimeout(timeoutHandle);
+      knownClients.set(self, knownClient);
+      sendResponse(self, { method: "helloAgain", id, name: knownClient.name, uid: knownClient.uid });
+      sendBroadcast({ broadcast: "online", sender: { name: knownClient.name, uid: knownClient.uid } });
       return;
     }
     // self wasn't in offlineClients - so it must be in newClients:
@@ -105,106 +145,46 @@ const requestHandler = {
     // Answer with a standard hello:
     const key = generateKey();
     unknownClients.set(self, { key, triedRandomUids: new Set() });
-    sendResponse(self, {
-      method: "hello",
-      id,
-      key,
-    });
+    try {
+      const uid = generateRandomUid(self);
+      sendResponse(self, {
+        method: "hello",
+        id,
+        key,
+        uid,
+      });
+    } catch (ex) {
+      if (ex instanceof Error) {
+        sendResponse(self, { method: "failed", id, reason: ex.message });
+      }
+    }
+  },
+
+  setName(self: ws, request: RequestModel) {
+    const { id } = request;
+    // Check model type:
+    if (!isSetNameRequestModel(request)) {
+      sendResponse(self, { method: "failed", id, reason: "Invalid request." });
+      return;
+    }
+    // self must bei in unknownClients:
+    const unknownClient = unknownClients.get(self);
+    if (!unknownClient) {
+      sendResponse(self, { method: "failed", id, reason: "You are not allowed to call setName." });
+      return;
+    }
+    const { name, uid } = request;
+    const knownClient: KnownClient = {
+      name,
+      uid,
+      key: unknownClient.key,
+    };
+    unknownClients.delete(self);
+    knownClients.set(self, knownClient);
+    sendResponse(self, { method: "ok", id });
+    sendBroadcast({ broadcast: "newClient", sender: { name, uid } });
   },
 };
-
-// const knownModelHandler = {
-//   hello: (self: ws, helloModel: KnownModel) => {
-//     if (!isHelloModel(helloModel)) return;
-//     const myself = knownClients.get(self)!;
-//     myself.valid = true;
-//     sendSelf(self, {
-//       method: "ok",
-//       id: helloModel.id,
-//     });
-//   },
-
-//   getRandomUid: (self: ws, getRandomUidModel: KnownModel) => {
-//     if (!isGetRandomUidModel(getRandomUidModel)) return;
-//     const { id } = getRandomUidModel;
-//     const myself = knownClients.get(self)!;
-//     if (!myself.valid) {
-//       sendSelf(self, {
-//         method: "failed",
-//         id,
-//         reason: "Myself isn't valid.",
-//       });
-//       return;
-//     }
-//     if (myself.name || myself.uid) {
-//       sendSelf(self, {
-//         method: "failed",
-//         id,
-//         reason: "You already set your name.",
-//       });
-//       return;
-//     }
-//     const start = 1000; // 10;
-//     const end = 10000; // 20;
-//     const triedRandomUids = myself.triedRandomUids || new Set();
-//     const otherClientUids = new Set(Array.from(knownClients, ([, client]) => client.uid));
-//     knownClients.forEach((client) => client.uid && triedRandomUids.add(client.uid));
-
-//     const freeKeys = Array
-//       .from({ length: end - start }, (_, k) => k + start)
-//       .filter((k) => !triedRandomUids.has(k) && !otherClientUids.has(k));
-
-//     if (!freeKeys.length) {
-//       sendSelf(self, {
-//         method: "failed",
-//         id,
-//         reason: "No more free keys.",
-//       });
-//       return;
-//     }
-
-//     const uid = freeKeys[Math.floor(Math.random() * freeKeys.length)];
-//     triedRandomUids.add(uid);
-//     myself.triedRandomUids = triedRandomUids;
-//     sendSelf(self, {
-//       method: "getRandomUid",
-//       id,
-//       uid,
-//     });
-//   },
-
-//   setName: (self: ws, setNameModel: KnownModel) => {
-//     if (!isSetNameModel(setNameModel)) return;
-//     const { id, name, uid } = setNameModel;
-//     const myself = knownClients.get(self)!;
-//     if (!myself.valid) {
-//       sendSelf(self, {
-//         method: "failed",
-//         id,
-//         reason: "Myself isn't valid.",
-//       });
-//       return;
-//     }
-//     if (myself.name || myself.uid) {
-//       sendSelf(self, {
-//         method: "failed",
-//         id,
-//         reason: "You already set your name.",
-//       });
-//       return;
-//     }
-//     myself.name = name;
-//     myself.uid = uid;
-//     sendSelf(self, {
-//       method: "ok",
-//       id,
-//     });
-//     sendOthers(self, {
-//       method: "setName",
-//       name,
-//       uid,
-//     });
-//   },
 
 //   leave: (self: ws) => {
 //     const { valid, name, uid } = knownClients.get(self)!;
@@ -238,14 +218,18 @@ portalServer.on("connection", (socket) => {
   });
 
   socket.on("close", (code, reason) => {
-    console.log(`Closing Socket... Code: ${code}, Reason: ${reason}`);
+    logging.info(NAMESPACE, `Closing Socket... Code: ${code}, Reason: ${reason}`);
     const knownClient = knownClients.get(socket);
     unknownClients.delete(socket);
     newClients.delete(socket);
     if (knownClient) {
-      // knownModelHandler.leave(socket);
+      sendBroadcast({ broadcast: "offline", sender: { name: knownClient.name, uid: knownClient.uid } });
       knownClients.delete(socket);
-      offlineClients.add(knownClient);
+      const offlineClient: OfflineClient = {
+        ...knownClient,
+        timeoutHandle: setTimeout(offlineClientTimeoutHandler, 600000, knownClient.key), // 10min
+      };
+      offlineClients.add(offlineClient);
     }
   });
 });

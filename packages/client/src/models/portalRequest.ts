@@ -9,8 +9,17 @@ export type HelloAgainRequestModel = {
   key: string;
 };
 
+export type SetNameRequestModel = {
+  id: number;
+  method: "setName";
+  name: string;
+  uid: number;
+};
+
 export type RequestModel =
   HelloRequestModel
-  | HelloAgainRequestModel;
+  | HelloAgainRequestModel
+  | SetNameRequestModel;
 
 export const isHelloAgainRequestModel = (request: RequestModel): request is HelloAgainRequestModel => request.method === "helloAgain";
+export const isSetNameRequestModel = (request: RequestModel): request is SetNameRequestModel => request.method === "setName";

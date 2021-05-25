@@ -1,5 +1,6 @@
 export type MyselfBeforeLogin = {
   key: string;
+  uid: number;
 };
 
 export type Myself = {

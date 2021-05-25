@@ -2,8 +2,22 @@ import React from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
 import { KnownClient, Myself, MyselfBeforeLogin } from "../models/portalClient";
-import { HelloRequestModel, HelloAgainRequestModel, RequestModel, isHelloAgainRequestModel } from "../models/portalRequest";
-import { ResponseModel, isResponseModel, isFailedResponseModel, isHelloResponseModel, isHelloAgainResponseModel } from "../models/portalResponse";
+import {
+  HelloRequestModel,
+  HelloAgainRequestModel,
+  SetNameRequestModel,
+  RequestModel,
+  isHelloAgainRequestModel,
+  isSetNameRequestModel,
+} from "../models/portalRequest";
+import {
+  ResponseModel,
+  isResponseModel,
+  isOkResponseModel,
+  isFailedResponseModel,
+  isHelloResponseModel,
+  isHelloAgainResponseModel,
+} from "../models/portalResponse";
 
 type ResolveHandler = (value?: void | any | PromiseLike<void> | PromiseLike<any>) => void;
 type RejectHandler = (reason?: any) => void;
@@ -17,7 +31,7 @@ type PortalService = {
   myself: Myself | MyselfBeforeLogin | null;
   knownClients: KnownClient[];
   getRandomUid: () => Promise<number>;
-  setName: (userName: string, uid: number) => Promise<void>;
+  setName: (userName: string, uid: number) => Promise<Myself>;
 };
 
 function asyncReject<T = void>() {
@@ -58,7 +72,6 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
   const [, setTryReconnect] = React.useState(false);
   const [reconnectInProgress, setReconnectInProgress] = React.useState(false);
   const [myself, setMyself] = React.useState<Myself | MyselfBeforeLogin | null>(null);
-  console.warn("Render: ", myself);
   const [knownClients, _setKnownClients] = React.useState<KnownClient[]>([]);
 
   const requests = React.useMemo(() => new Map<number, RequestData>(), []);
@@ -72,7 +85,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     reconnectInterval: 1000,
     reconnectAttempts: 10,
     shouldReconnect: ((event) => {
-      console.warn(event);
+      console.warn(event.type);
       return true;
     }),
   });
@@ -85,14 +98,15 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
 
   const sendHello = React.useCallback(() => (
     new Promise<MyselfBeforeLogin>((resolve, reject) => {
+      setLoading(true);
       setMessageId((messageId) => {
         const id = messageId + 1;
-        const hello: HelloRequestModel = {
+        const request: HelloRequestModel = {
           method: "hello",
           id,
         };
-        requests.set(id, [hello, resolve, reject]);
-        sendMessage(JSON.stringify(hello));
+        requests.set(id, [request, resolve, reject]);
+        sendMessage(JSON.stringify(request));
         return id;
       });
     }).catch((ex) => {
@@ -100,20 +114,23 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         setError(ex);
       }
       throw ex;
+    }).finally(() => {
+      setLoading(false);
     })
   ), [requests, sendMessage]);
 
   const sendHelloAgain = React.useCallback((key: string) => (
     new Promise<Myself | MyselfBeforeLogin>((resolve, reject) => {
+      setLoading(true);
       setMessageId((messageId) => {
         const id = messageId + 1;
-        const helloAgain: HelloAgainRequestModel = {
+        const request: HelloAgainRequestModel = {
           method: "helloAgain",
           id,
           key,
         };
-        requests.set(id, [helloAgain, resolve, reject]);
-        sendMessage(JSON.stringify(helloAgain));
+        requests.set(id, [request, resolve, reject]);
+        sendMessage(JSON.stringify(request));
         return id;
       });
     }).catch((ex) => {
@@ -121,6 +138,36 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         setError(ex);
       }
       throw ex;
+    }).finally(() => {
+      setLoading(false);
+    })
+  ), [requests, sendMessage]);
+
+  const setName = React.useCallback((name: string, uid: number) => (
+    new Promise<Myself>((resolve, reject) => {
+      setLoading(true);
+      setMessageId((messageId) => {
+        const id = messageId + 1;
+        const request: SetNameRequestModel = {
+          method: "setName",
+          id,
+          name,
+          uid,
+        };
+        requests.set(id, [request, resolve, reject]);
+        sendMessage(JSON.stringify(request));
+        return id;
+      });
+    }).then((self) => {
+      setMyself(self);
+      return self;
+    }).catch((ex) => {
+      if (mounted.current && ex instanceof Error) {
+        setError(ex);
+      }
+      throw ex;
+    }).finally(() => {
+      setLoading(false);
     })
   ), [requests, sendMessage]);
 
@@ -131,7 +178,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         reject(new Error("Invalid Response"));
         return;
       }
-      resolve({ key: response.key });
+      resolve({ key: response.key, uid: response.uid });
     },
 
     helloAgain(request: RequestModel, response: ResponseModel, resolve: ResolveHandler, reject: RejectHandler) {
@@ -148,7 +195,20 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         reject(new Error("Invalid Response"));
         return;
       }
-      resolve({ key: response.key });
+      resolve({ key: response.key, uid: response.uid });
+    },
+
+    setName(request: RequestModel, response: ResponseModel, resolve: ResolveHandler, reject: RejectHandler, key?: string) {
+      if (!isSetNameRequestModel(request) || !key) {
+        reject(new Error("Invalid Request"));
+        return;
+      }
+      if (!testResponse(request, response, reject)) return;
+      if (!isOkResponseModel(response)) {
+        reject(new Error("Invalid Response"));
+        return;
+      }
+      resolve({ name: request.name, uid: request.uid, key });
     },
   }), []);
 
@@ -166,7 +226,6 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     setTryReconnect(tryReconnect);
 
     const initialize = async () => {
-      console.warn("Initialize - setReconnectInProgress(true)");
       setReconnectInProgress(true);
       try {
         if (key === null) {
@@ -175,14 +234,11 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         } else {
           const newMyself = await sendHelloAgain(key);
           if (mounted.current) setMyself(newMyself);
-          console.warn("setMyself:", newMyself);
         }
-        console.warn("Initialize - setReconnectInProgress(false)");
         if (mounted.current) setReconnectInProgress(false);
       } catch (ex) {
         if (mounted.current) {
           if (ex instanceof Error) setError(ex);
-          console.warn("Initialize Exception - setReconnectInProgress(false)");
           setReconnectInProgress(false);
         }
       }
@@ -200,7 +256,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
       myself,
       knownClients,
       getRandomUid: asyncReject,
-      setName: asyncReject,
+      setName,
     };
   }, [
     error,
@@ -208,6 +264,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     knownClients,
     readyState,
     reconnectInProgress,
+    setName,
   ]);
 
   // Handle incomming messages
@@ -220,7 +277,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         const { id } = response;
         const [request, resolve, reject] = requests.get(id) || [null, null, null];
         if (!request || !resolve || !reject) return;
-        responseHandler[request.method](request, response, resolve, reject);
+        responseHandler[request.method](request, response, resolve, reject, myself?.key);
       }
     } catch {
       // ignore

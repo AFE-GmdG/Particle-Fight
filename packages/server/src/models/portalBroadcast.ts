@@ -19,6 +19,11 @@ export type OnlineBroadcastModel = {
   sender: Sender;
 };
 
+export type LogoutBroadcastModel = {
+  broadcast: "logout";
+  sender: Sender;
+};
+
 export type ChatBroadcastModel = {
   broadcast: "chat";
   sender: Sender;
@@ -29,4 +34,5 @@ export type BroadcastModel =
   | NewClientBroadcastModel
   | OfflineBroadcastModel
   | OnlineBroadcastModel
+  | LogoutBroadcastModel
   | ChatBroadcastModel;

@@ -54,7 +54,7 @@ const Login: React.FC = () => {
   const history = useHistory();
   const classes = useStyles();
 
-  const { loading, error, connected, myself, knownClients, getRandomUid, setName } = React.useContext(PortalContext);
+  const { loading, error, connected, myself, getRandomUid, setName } = React.useContext(PortalContext);
 
   const [userName, setUserName] = React.useState("");
   const [uid, setUid] = React.useState(0);
@@ -63,6 +63,8 @@ const Login: React.FC = () => {
   React.useLayoutEffect(() => {
     if (myself !== null && "name" in myself) {
       history.push("/");
+    } else if (mounted.current && myself) {
+      setUid(myself.uid);
     }
   }, [myself]);
 
@@ -96,21 +98,6 @@ const Login: React.FC = () => {
       mounted.current = false;
     };
   }, []);
-
-  // Initialize first uid
-  React.useEffect(() => {
-    const getNextRandomUid = async () => {
-      const newUid = await getRandomUid();
-
-      if (mounted.current) {
-        setUid(newUid);
-      }
-    };
-
-    if (!loading && (uid === 0 || knownClients.find((client) => client.uid === uid))) {
-      getNextRandomUid();
-    }
-  }, [loading, uid, knownClients, getRandomUid]);
 
   return (
     <div className={classes.root}>

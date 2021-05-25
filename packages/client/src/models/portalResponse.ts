@@ -13,6 +13,7 @@ export type HelloResponseModel = {
   id: number;
   method: "hello";
   key: string;
+  uid: number;
 };
 
 export type HelloAgainResponseModel = {
