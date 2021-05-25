@@ -84,7 +84,7 @@ const Login: React.FC = () => {
   }, [getRandomUid]);
 
   const onSetNameClick = React.useCallback(async () => {
-    await setName(userName, uid);
+    await setName(userName.trim(), uid);
   }, [userName, uid, setName]);
 
   const onUserNameKeyPress = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {

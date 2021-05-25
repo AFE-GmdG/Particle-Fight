@@ -7,10 +7,10 @@ import Typography from "@material-ui/core/Typography";
 
 import PlayerList from "../components/portal/playerList";
 
-const useStyles = makeStyles((theme: Theme) => createStyles({
+const useStyles = makeStyles((_theme: Theme) => createStyles({
   slash: {
     position: "relative",
-    backgroundColor: theme.palette.background.paper,
+    flex: "1 0 0px",
   },
 }));
 
@@ -18,11 +18,11 @@ const Slash: React.FC = () => {
   const classes = useStyles();
 
   return (
-    <Grid container className={classes.slash}>
-      <Grid item lg={9}>
+    <Grid container className={classes.slash} spacing={1}>
+      <Grid item md={9}>
         <Typography>Foo</Typography>
       </Grid>
-      <Grid item lg={3}>
+      <Grid item md={3}>
         <PlayerList />
       </Grid>
     </Grid>

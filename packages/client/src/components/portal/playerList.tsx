@@ -6,9 +6,16 @@ import Typography from "@material-ui/core/Typography";
 
 import PortalContext from "../../services/portalService";
 
-const useStyles = makeStyles((_theme: Theme) => createStyles({
+const useStyles = makeStyles((theme: Theme) => createStyles({
   root: {
     position: "relative",
+    height: `calc(100% - ${theme.spacing(2)}px)`,
+    padding: theme.spacing(1, 2),
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    backgroundColor: theme.palette.background.paper,
   },
 }));
 

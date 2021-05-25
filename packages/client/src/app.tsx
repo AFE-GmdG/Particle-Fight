@@ -38,9 +38,12 @@ const useStyles = makeStyles((theme: Theme) => createStyles({
     },
   },
   content: {
-    backgroundColor: theme.palette.background.default,
     position: "relative",
     flex: "1 0 0px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "space-between",
     padding: theme.spacing(2),
   },
 }));
