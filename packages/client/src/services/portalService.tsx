@@ -22,6 +22,10 @@ import {
 import {
   BroadcastModel,
   isBroadcastModel,
+  isLogoutBroadcastModel,
+  isNewClientBroadcastModel,
+  isOfflineBroadcastModel,
+  isOnlineBroadcastModel,
   isShutdownBroadcastModel,
 } from "../models/portalBroadcast";
 
@@ -87,7 +91,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
   const [, setTryReconnect] = React.useState(false);
   const [reconnectInProgress, setReconnectInProgress] = React.useState(false);
   const [myself, setMyself] = React.useState<Myself | MyselfBeforeLogin | null>(null);
-  const [knownClients, _setKnownClients] = React.useState<KnownClient[]>([]);
+  const [knownClients, setKnownClients] = React.useState<KnownClient[]>([]);
 
   const requests = React.useMemo(() => new Map<number, RequestData>(), []);
   const [, setMessageId] = React.useState(0);
@@ -243,16 +247,66 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
       history.push("/no-server");
     },
 
-    newClient(_message: BroadcastModel) {
+    newClient(message: BroadcastModel) {
+      if (!isNewClientBroadcastModel(message)) return;
+      const { name, uid } = message.sender;
+      const knownClient: KnownClient = {
+        name,
+        uid,
+        offline: false,
+      };
+      setKnownClients((clients) => {
+        if (clients.find((client) => client.name === name && client.uid === uid)) {
+          return clients;
+        }
+        return [...clients, knownClient];
+      });
     },
 
-    offline(_message: BroadcastModel) {
+    offline(message: BroadcastModel) {
+      if (!isOfflineBroadcastModel(message)) return;
+      const { name, uid } = message.sender;
+      setKnownClients((clients) => {
+        const knownClient = clients.find((client) => client.name === name && client.uid === uid);
+        if (!knownClient) return clients;
+        return clients.reduce<KnownClient[]>((acc, client) => {
+          if (client.name === name && client.uid === uid) {
+            acc.push({ ...client, offline: Date.now() });
+          } else {
+            acc.push(client);
+          }
+          return acc;
+        }, []);
+      });
     },
 
-    online(_message: BroadcastModel) {
+    online(message: BroadcastModel) {
+      if (!isOnlineBroadcastModel(message)) return;
+      const { name, uid } = message.sender;
+      setKnownClients((clients) => {
+        const knownClient = clients.find((client) => client.name === name && client.uid === uid);
+        if (!knownClient) {
+          return [...clients, { name, uid, offline: false }];
+        }
+        return clients.reduce<KnownClient[]>((acc, client) => {
+          if (client.name === name && client.uid === uid) {
+            acc.push({ ...client, offline: false });
+          } else {
+            acc.push(client);
+          }
+          return acc;
+        }, []);
+      });
     },
 
-    logout(_message: BroadcastModel) {
+    logout(message: BroadcastModel) {
+      if (!isLogoutBroadcastModel(message)) return;
+      const { name, uid } = message.sender;
+      setKnownClients((clients) => {
+        const index = clients.findIndex((client) => client.name === name && client.uid === uid);
+        if (index < 0) return clients;
+        return [...clients.slice(0, index), ...clients.slice(index + 1)];
+      });
     },
 
     chat(_message: BroadcastModel) {
