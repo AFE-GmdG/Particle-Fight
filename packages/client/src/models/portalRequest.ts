@@ -16,10 +16,17 @@ export type SetNameRequestModel = {
   uid: number;
 };
 
+export type ChatRequestModel = {
+  id: number;
+  method: "chat";
+  message: string;
+};
+
 export type RequestModel =
   HelloRequestModel
   | HelloAgainRequestModel
-  | SetNameRequestModel;
+  | SetNameRequestModel
+  | ChatRequestModel;
 
 export const isHelloAgainRequestModel = (request: RequestModel): request is HelloAgainRequestModel => request.method === "helloAgain";
 export const isSetNameRequestModel = (request: RequestModel): request is SetNameRequestModel => request.method === "setName";

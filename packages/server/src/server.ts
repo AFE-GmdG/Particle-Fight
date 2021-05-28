@@ -59,9 +59,18 @@ router.use((_req, res) => {
   res.status(404).json({ message: error.message });
 });
 
-const httpServer = http.createServer(router);
+const httpServer = http.createServer({
+  insecureHTTPParser: false,
+}, router);
 
-httpServer.listen(3000, () => logging.info(NAMESPACE, "Server is running on Port 3000"));
+httpServer.listen({
+  port: 3000,
+  host: "::",
+  backlog: 511,
+  exclusive: true,
+  ipv6Only: true,
+}, () => logging.info(NAMESPACE, "Server is running on Port 3000"));
+
 httpServer.on("upgrade", (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
   logging.info(NAMESPACE, `WebSocket Connection Upgrade: [${req.url}]`);
   if (req.url === "/portal") {

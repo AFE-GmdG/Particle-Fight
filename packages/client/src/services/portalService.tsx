@@ -3,10 +3,12 @@ import { useHistory } from "react-router-dom";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
 import { KnownClient, Myself, MyselfBeforeLogin } from "../models/portalClient";
+import { ChatMessage } from "../models/portalChat";
 import {
   HelloRequestModel,
   HelloAgainRequestModel,
   SetNameRequestModel,
+  ChatRequestModel,
   RequestModel,
   isHelloAgainRequestModel,
   isSetNameRequestModel,
@@ -22,6 +24,7 @@ import {
 import {
   BroadcastModel,
   isBroadcastModel,
+  isChatBroadcastModel,
   isLogoutBroadcastModel,
   isNewClientBroadcastModel,
   isOfflineBroadcastModel,
@@ -40,8 +43,10 @@ type PortalService = {
   tryReconnect: boolean;
   myself: Myself | MyselfBeforeLogin | null;
   knownClients: KnownClient[];
+  lastChatMessage: ChatMessage | null;
   getRandomUid: () => Promise<number>;
   setName: (userName: string, uid: number) => Promise<Myself>;
+  chat: (message: string) => Promise<void>;
 };
 
 function asyncReject<T = void>() {
@@ -67,8 +72,10 @@ const portalContextData: PortalService = {
   tryReconnect: false,
   myself: null,
   knownClients: [],
+  lastChatMessage: null,
   getRandomUid: asyncReject,
   setName: asyncReject,
+  chat: asyncReject,
 };
 
 const PortalContext = React.createContext(portalContextData);
@@ -92,13 +99,18 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
   const [reconnectInProgress, setReconnectInProgress] = React.useState(false);
   const [myself, setMyself] = React.useState<Myself | MyselfBeforeLogin | null>(null);
   const [knownClients, setKnownClients] = React.useState<KnownClient[]>([]);
+  const [lastChatMessage, setLastChatMessage] = React.useState<ChatMessage | null>(null);
 
   const requests = React.useMemo(() => new Map<number, RequestData>(), []);
   const [, setMessageId] = React.useState(0);
 
-  const { protocol, hostname, port } = window.location;
-
-  const { readyState, lastMessage, sendMessage } = useWebSocket(`${protocol === "http:" ? "ws://" : "wss://"}${hostname}${port === "3001" ? ":3000" : `:${port}`}/portal`, {
+  const webSocketUrl = React.useMemo(() => {
+    const { protocol, hostname, port } = window.location;
+    const url = `${protocol === "http:" ? "ws://" : "wss://"}${hostname}${port === "3001" ? ":3000" : `:${port}`}/portal`;
+    // console.log(`WebSocketUrl: [${url}]`);
+    return url;
+  }, []);
+  const { readyState, lastMessage, sendMessage } = useWebSocket(webSocketUrl, {
     share: true,
     retryOnError: false,
     reconnectInterval: 1000,
@@ -201,6 +213,27 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     })
   ), [requests, sendMessage]);
 
+  const chat = React.useCallback((message: string) => (
+    new Promise<void>((resolve, reject) => {
+      setMessageId((messageId) => {
+        const id = messageId + 1;
+        const request: ChatRequestModel = {
+          method: "chat",
+          id,
+          message,
+        };
+        requests.set(id, [request, resolve, reject]);
+        sendMessage(JSON.stringify(request));
+        return id;
+      });
+    }).catch((ex) => {
+      if (mounted.current && ex instanceof Error) {
+        setError(ex);
+      }
+      throw ex;
+    })
+  ), [requests, sendMessage]);
+
   const responseHandler = React.useMemo(() => ({
     hello(request: RequestModel, response: ResponseModel, resolve: ResolveHandler, reject: RejectHandler) {
       if (!testResponse(request, response, reject)) return;
@@ -239,6 +272,15 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
         return;
       }
       resolve({ name: request.name, uid: request.uid, key: myself.key });
+    },
+
+    chat(request: RequestModel, response: ResponseModel, resolve: ResolveHandler, reject: RejectHandler) {
+      if (!testResponse(request, response, reject)) return;
+      if (!isOkResponseModel(response)) {
+        reject(new Error("Invalid Response"));
+        return;
+      }
+      resolve();
     },
   }), [myself]);
 
@@ -309,7 +351,14 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
       });
     },
 
-    chat(_message: BroadcastModel) {
+    chat(message: BroadcastModel) {
+      if (!isChatBroadcastModel(message)) return;
+      const { sender, messageTime, messageText } = message;
+      setLastChatMessage({
+        sender,
+        messageTime,
+        messageText,
+      });
     },
   }), [myself]);
 
@@ -356,8 +405,10 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
       tryReconnect,
       myself,
       knownClients,
+      lastChatMessage,
       getRandomUid: asyncReject,
       setName,
+      chat,
     };
   }, [
     error,
@@ -365,7 +416,9 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     knownClients,
     readyState,
     reconnectInProgress,
+    lastChatMessage,
     setName,
+    chat,
   ]);
 
   // Handle incomming messages

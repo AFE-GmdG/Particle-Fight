@@ -27,6 +27,8 @@ export type LogoutBroadcastModel = {
 export type ChatBroadcastModel = {
   broadcast: "chat";
   sender: Sender;
+  messageTime: number;
+  messageText: string;
 };
 
 export type BroadcastModel =

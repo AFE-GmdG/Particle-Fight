@@ -6,7 +6,14 @@ import logging from "../config/logging";
 
 import { UnknownClient, KnownClient, OfflineClient } from "../models/portalClient";
 import { BroadcastModel } from "../models/portalBroadcast";
-import { RequestModel, isRequestModel, isHelloRequestModel, isHelloAgainRequestModel, isSetNameRequestModel } from "../models/portalRequest";
+import {
+  RequestModel,
+  isRequestModel,
+  isHelloRequestModel,
+  isHelloAgainRequestModel,
+  isSetNameRequestModel,
+  isChatRequestModel,
+} from "../models/portalRequest";
 import { ResponseModel } from "../models/portalResponse";
 
 const NAMESPACE = "PortalController";
@@ -183,6 +190,29 @@ const requestHandler = {
     knownClients.set(self, knownClient);
     sendResponse(self, { method: "ok", id });
     sendBroadcast({ broadcast: "newClient", sender: { name, uid } });
+  },
+
+  chat(self: ws, request: RequestModel) {
+    const { id } = request;
+    // Check model type:
+    if (!isChatRequestModel(request)) {
+      sendResponse(self, { method: "failed", id, reason: "Invalid request." });
+      return;
+    }
+    // self must be in knownClients. Else a chatRequest isnt possible.:
+    const knownClient = knownClients.get(self);
+    if (!knownClient) {
+      sendResponse(self, { method: "failed", id, reason: "You aren't a known client." });
+      return;
+    }
+    const { name, uid } = knownClient;
+    sendResponse(self, { method: "ok", id });
+    sendBroadcast({
+      broadcast: "chat",
+      sender: { name, uid },
+      messageTime: Date.now(),
+      messageText: request.message,
+    });
   },
 };
 
