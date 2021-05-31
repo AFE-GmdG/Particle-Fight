@@ -134,7 +134,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
 
   React.useEffect(() => {
     if (myself) {
-      localStorage.setItem("key", myself.key);
+      sessionStorage.setItem("key", myself.key);
     }
   }, [myself]);
 
@@ -367,7 +367,7 @@ export const PortalServiceProvider: React.FC = ({ children }) => {
     const connected = readyState === ReadyState.OPEN;
     setConnected(connected);
 
-    const key = (myself === null && localStorage.getItem("key")) || null;
+    const key = (myself === null && sessionStorage.getItem("key")) || null;
 
     const loading = !error && (!connected || myself === null);
     setLoading(loading);

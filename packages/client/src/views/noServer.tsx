@@ -30,7 +30,7 @@ const NoServer: React.FC = () => {
   const classes = useStyles();
 
   React.useEffect(() => {
-    localStorage.clear();
+    sessionStorage.clear();
   }, []);
 
   return (

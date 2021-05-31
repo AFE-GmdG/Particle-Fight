@@ -77,8 +77,32 @@ const PlayerList: React.FC = () => {
   }, []);
 
   const groupedKnownClients = React.useMemo(() => {
-    const onlineClients = knownClients.filter((client) => !client.offline).sort(sortClient);
-    const offlineClients = knownClients.filter((client) => client.offline).sort(sortClient);
+    const onlineClients = knownClients.filter((client) => !client.offline).sort(sortClient).map((client) => (
+      <ListItem key={`${client.name}#${client.uid}`} button>
+        <ListItemAvatar>
+          <Avatar>{client.name[0].toUpperCase()}</Avatar>
+        </ListItemAvatar>
+        <ListItemText
+          primary={`${client.name}#${client.uid}`}
+        />
+        <ListItemSecondaryAction>
+          <SignalCellular4BarTwoTone color="action" />
+        </ListItemSecondaryAction>
+      </ListItem>
+    ));
+    const offlineClients = knownClients.filter((client) => client.offline).sort(sortClient).map((client) => (
+      <ListItem key={`${client.name}#${client.uid}`} button>
+        <ListItemAvatar>
+          <Avatar>{client.name[0].toUpperCase()}</Avatar>
+        </ListItemAvatar>
+        <ListItemText
+          primary={`${client.name}#${client.uid}`}
+        />
+        <ListItemSecondaryAction>
+          <SignalCellularOffTwoTone color="error" />
+        </ListItemSecondaryAction>
+      </ListItem>
+    ));
     return {
       onlineClients,
       offlineClients,
@@ -114,37 +138,9 @@ const PlayerList: React.FC = () => {
         <li className={classes.listSection}>
           <ul className={classes.subList}>
             <ListSubheader className={classes.subHeader}>Online</ListSubheader>
-            {
-              groupedKnownClients.onlineClients.map((client) => (
-                <ListItem key={`${client.name}#${client.uid}`} button>
-                  <ListItemAvatar>
-                    <Avatar>{client.name[0].toUpperCase()}</Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={`${client.name}#${client.uid}`}
-                  />
-                  <ListItemSecondaryAction>
-                    <SignalCellular4BarTwoTone color="action" />
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))
-            }
+            { groupedKnownClients.onlineClients }
             <ListSubheader className={classes.subHeader}>Offline</ListSubheader>
-            {
-              groupedKnownClients.offlineClients.map((client) => (
-                <ListItem key={`${client.name}#${client.uid}`} button>
-                  <ListItemAvatar>
-                    <Avatar>{client.name[0].toUpperCase()}</Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={`${client.name}#${client.uid}`}
-                  />
-                  <ListItemSecondaryAction>
-                    <SignalCellularOffTwoTone color="error" />
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))
-            }
+            { groupedKnownClients.offlineClients }
           </ul>
         </li>
       </List>

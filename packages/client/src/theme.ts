@@ -1,7 +1,24 @@
 import { createMuiTheme } from "@material-ui/core/styles";
 
 export default createMuiTheme({
-  overrides: {
+  palette: {
+    type: "light",
+    primary: {
+      main: "#0884b4",
+    },
+    secondary: {
+      main: "#08a154",
+    },
+    text: {
+      primary: "rgba(51, 51, 51, 0.87)",
+      secondary: "rgba(51, 51, 51, 0.60)",
+      disabled: "rgba(51, 51, 51, 0.38)",
+    },
+    background: {
+      default: "#ffffff",
+      paper: "#ececec",
+    },
+    divider: "rgba(0, 0, 0, 0.12)",
   },
   typography: {
     fontFamily: "Hind",

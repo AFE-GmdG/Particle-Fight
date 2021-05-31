@@ -61,7 +61,7 @@ const useStyles = makeStyles((theme: Theme) => createStyles({
     flex: "1 0 0px",
     display: "flex",
     flexDirection: "column",
-    padding: theme.spacing(1, 2, 1, 1),
+    padding: theme.spacing(1),
   },
   chatMessageList: {
     flex: "1 0 0px",
@@ -165,6 +165,14 @@ const GlobalChat: React.FC = () => {
     );
   }
 
+  const chatMessageItems = React.useMemo(() => chatMessages.map((message) => (
+    <ChatMessageItem
+      key={message.messageTime}
+      myself={myself}
+      message={message}
+    />
+  )), [chatMessages]);
+
   return (
     <Card className={classes.card} elevation={3}>
       <CardHeader
@@ -176,15 +184,7 @@ const GlobalChat: React.FC = () => {
       />
       <CardContent className={classes.cardContent}>
         <List className={classes.chatMessageList}>
-          {
-            chatMessages.map((message) => (
-              <ChatMessageItem
-                key={message.messageTime}
-                myself={myself}
-                message={message}
-              />
-            ))
-          }
+          { chatMessageItems }
         </List>
       </CardContent>
       <CardActions className={classes.cardActions}>
